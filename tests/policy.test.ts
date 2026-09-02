@@ -94,4 +94,28 @@ describe("PolicyEngine", () => {
     expect(withClient.isKnownClient(ALICE)).toBe(true);
     expect(withClient.isKnownClient(BOB)).toBe(false);
   });
+
+  it("still denies after a mid-session revocation (snapshot invariant)", () => {
+    let clientKnown = true;
+    const engine = new PolicyEngine({
+      loadRules: () => [
+        { clientPubkey: ALICE, actionType: "sign_event:kind-1", createdAt: 1 }
+      ],
+      saveRules: () => {},
+      isClient: () => clientKnown
+    });
+    expect(engine.decide(ALICE, "sign_event:kind-1")).toBe("allow");
+    clientKnown = false;
+    expect(engine.decide(ALICE, "sign_event:kind-1")).toBe("deny");
+  });
+
+  it("addRule for a revoked client does not resurrect access", () => {
+    const revoked = makeEngine(
+      [{ clientPubkey: ALICE, actionType: "sign_event:kind-1", createdAt: 1 }],
+      []
+    );
+    expect(revoked.decide(ALICE, "sign_event:kind-1")).toBe("deny");
+    revoked.addRule(ALICE, "sign_event:kind-1");
+    expect(revoked.decide(ALICE, "sign_event:kind-1")).toBe("deny");
+  });
 });

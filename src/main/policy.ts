@@ -8,6 +8,8 @@ export interface PolicyEngineDeps {
 
 export class PolicyEngine {
   private rules: ApprovalRule[];
+  // Snapshot of pubkeys with rules at load time; intentionally NOT mutated by
+  // addRule/forgetRulesFor so a mid-session revocation still denies.
   private readonly persistedPubkeys: Set<string>;
 
   constructor(private deps: PolicyEngineDeps) {
