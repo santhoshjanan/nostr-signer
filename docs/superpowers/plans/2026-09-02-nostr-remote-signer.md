@@ -705,6 +705,8 @@ git add src/main/policy.ts tests/policy.test.ts
 git commit -m "feat: policy engine with per-client per-action-type rules"
 ```
 
+> **Note (deviation from Step 3 code as written):** the `decide` implementation shown above denies any unknown client, but the tests construct the engine with zero known clients and expect `ask`/`allow`. These conflict. The shipped implementation resolves it fail-safely: `decide` returns `deny` only for a client that is unknown AND had rules persisted at load time (a revoked previously-trusted client); brand-new unknown pubkeys get `ask` (surfaced as an approval popup; nothing is signed without consent), and a matching persisted rule is always required for `allow`. This preserves the invariant that no unknown client can ever receive `allow` without an explicit matching rule.
+
 ---
 
 ### Task 4: KeyVault
