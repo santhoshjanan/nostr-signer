@@ -11,9 +11,10 @@
     "forceConsistentCasingInFileNames": true,
     "sourceMap": true,
     "outDir": "out",
-    "rootDir": ".",
+    "rootDir": "src",
     "composite": true,
     "types": []
   },
-  "include": ["src/renderer/**/*", "src/shared/**/*"]
+  "include": ["src/renderer/**/*"],
+  "references": [{ "path": "./tsconfig.shared.json" }]
 }

@@ -6,16 +6,13 @@
     "lib": ["ES2022"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "sourceMap": true,
     "outDir": "out",
     "rootDir": "src",
-    "composite": true,
-    "types": ["node"]
+    "composite": true
   },
-  "include": ["src/main/**/*", "src/preload/**/*"],
-  "references": [{ "path": "./tsconfig.shared.json" }]
+  "include": ["src/shared/**/*"]
 }

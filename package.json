@@ -10,7 +10,7 @@
     "dev": "npm run build && electron .",
     "start": "electron .",
     "test": "vitest run",
-    "typecheck": "tsc -b tsconfig.node.json tsconfig.web.json --noEmit false",
+    "typecheck": "tsc -b tsconfig.node.json tsconfig.web.json",
     "dist": "npm run build && electron-builder --dir",
     "postinstall": "electron-builder install-app-deps"
   },
