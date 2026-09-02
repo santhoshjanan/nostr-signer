@@ -46,4 +46,5 @@ export interface SignerApi {
   setRelays(urls: string[]): Promise<void>;
   onApprovalRequested(cb: (approval: PendingApproval) => void): void;
   onActivity(cb: (entry: LogEntry) => void): void;
+  onStatusChanged(cb: (statuses: RelayStatus[]) => void): void;
 }
