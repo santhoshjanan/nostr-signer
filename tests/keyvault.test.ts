@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { KeyVault, type KeyVaultStorage } from "../src/main/keyvault.js";
 import type { SafeStorageLike } from "../src/shared/types.js";
+import { getPublicKey } from "nostr-tools/pure";
 
 export class FakeSafeStorage implements SafeStorageLike {
   isEncryptionAvailable(): boolean {
@@ -91,5 +92,37 @@ describe("KeyVault", () => {
     const vault2 = new KeyVault(new FakeSafeStorage(), storage);
     expect(vault2.hasKey()).toBe(false);
     expect(() => vault2.getSecretKey()).toThrow(/no key/i);
+  });
+
+  it("rejects uppercase hex keys", () => {
+    expect(() => vault.setKey("A".repeat(64))).toThrow(/invalid/i);
+    expect(vault.hasKey()).toBe(false);
+  });
+
+  it("getPublicKeyHex returns the known public key for a secret key", () => {
+    vault.setKey(NSEC_HEX);
+    const expected = getPublicKey(Buffer.from(NSEC_HEX, "hex"));
+    expect(vault.getPublicKeyHex()).toBe(expected);
+    expect(vault.getPublicKeyHex()).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("fails safe on a corrupt-but-decryptable blob (wrong length)", () => {
+    // DPAPI "succeeds" but the payload is base64 of 16 bytes, not 32.
+    const badPayload = Buffer.from("dpapi:" + Buffer.alloc(16).toString("base64"), "utf8");
+    storage.blob = badPayload;
+    const vault2 = new KeyVault(new FakeSafeStorage(), storage);
+    expect(vault2.hasKey()).toBe(false);
+    expect(() => vault2.getSecretKey()).toThrow(/no key/i);
+    expect(storage.blob).toBeNull();
+  });
+
+  it("fails safe on a corrupt-but-decryptable blob (non-canonical base64)", () => {
+    // DPAPI "succeeds" but the payload is not valid canonical base64 of 32 bytes.
+    const badPayload = Buffer.from("dpapi:not!!base64!!", "utf8");
+    storage.blob = badPayload;
+    const vault2 = new KeyVault(new FakeSafeStorage(), storage);
+    expect(vault2.hasKey()).toBe(false);
+    expect(() => vault2.getSecretKey()).toThrow(/no key/i);
+    expect(storage.blob).toBeNull();
   });
 });
