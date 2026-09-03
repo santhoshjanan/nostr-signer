@@ -8,8 +8,13 @@ export interface PolicyEngineDeps {
 
 export class PolicyEngine {
   private rules: ApprovalRule[];
-  // Snapshot of pubkeys with rules at load time; intentionally NOT mutated by
-  // addRule/forgetRulesFor so a mid-session revocation still denies.
+  // Every pubkey that has ever had a rule persisted for it: seeded from
+  // loadRules() at construction time and grown by addRule() as new rules are
+  // added during the session. Deliberately NOT shrunk by forgetRulesFor() --
+  // that's what makes revocation a hard deny (see decide()) rather than
+  // merely falling back to "ask": a client who once had standing access and
+  // is now unknown must never be treated the same as a stranger who has
+  // never been granted anything.
   private readonly persistedPubkeys: Set<string>;
 
   constructor(private deps: PolicyEngineDeps) {
@@ -34,6 +39,17 @@ export class PolicyEngine {
     if (!exists) {
       this.rules.push({ clientPubkey, actionType, createdAt: Date.now() });
       this.deps.saveRules(this.rules);
+    }
+    // Only track it as "has had standing access" if it was a genuinely
+    // known/paired client at the moment the rule was granted -- a client
+    // that connects mid-session and is granted an always-allow rule was
+    // never in the constructor's snapshot, so without this a later
+    // revocation of it would only fall back to "ask" instead of the hard
+    // "deny" decide() is supposed to give it. Gating on isClient() here
+    // keeps this from firing for synthetic/administrative addRule() calls
+    // made against a pubkey that was never actually a live client.
+    if (this.deps.isClient(clientPubkey)) {
+      this.persistedPubkeys.add(clientPubkey);
     }
   }
 

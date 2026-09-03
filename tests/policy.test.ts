@@ -118,4 +118,28 @@ describe("PolicyEngine", () => {
     revoked.addRule(ALICE, "sign_event:kind-1");
     expect(revoked.decide(ALICE, "sign_event:kind-1")).toBe("deny");
   });
+
+  it("hard-denies a client that only ever got a rule mid-session (not present in the loaded rules) after it is later revoked", () => {
+    let clientKnown = true;
+    const engine = new PolicyEngine({
+      loadRules: () => [],
+      saveRules: () => {},
+      isClient: () => clientKnown
+    });
+
+    // BOB connects this session and is granted always-allow while still a
+    // known/paired client -- he was never part of the persisted rules the
+    // constructor snapshotted, so a naive snapshot-only Set would never
+    // learn about him.
+    engine.addRule(BOB, "sign_event:kind-1");
+    expect(engine.decide(BOB, "sign_event:kind-1")).toBe("allow");
+
+    // BOB is revoked (e.g. removed from the client registry) later in the
+    // same session, without the process restarting.
+    clientKnown = false;
+    expect(engine.decide(BOB, "sign_event:kind-1")).toBe("deny");
+    // The hard deny applies to every action type, not just the one he had
+    // a rule for.
+    expect(engine.decide(BOB, "nip04_decrypt")).toBe("deny");
+  });
 });
