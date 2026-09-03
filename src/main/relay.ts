@@ -23,15 +23,20 @@ export function normalizeRelayUrls(urls: string[]): string[] {
 export class SimplePoolTransport implements RelayTransport {
   private pool = new SimplePool();
   private relays: string[];
+  private everRelays = new Set<string>();
   private statuses = new Map<string, RelayStatus>();
   private statusCb: ((statuses: RelayStatus[]) => void) | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private refreshing = false;
+  private activeSub: { spec: TransportSubscription; closer: { close(): void }; id: number } | null =
+    null;
+  private subCounter = 0;
 
   constructor(relays: string[]) {
     this.relays = normalizeRelayUrls(relays);
     for (const url of this.relays) {
       this.statuses.set(url, { url, connected: false });
+      this.everRelays.add(url);
     }
   }
 
@@ -74,12 +79,47 @@ export class SimplePoolTransport implements RelayTransport {
   }
 
   subscribe(sub: TransportSubscription): { close(): void } {
-    const closer = this.pool.subscribeMany(this.relays, sub.filters[0]!, {
+    const filter = sub.filters[0];
+    if (!filter) {
+      throw new Error("subscribe() requires at least one filter, but received an empty filters array");
+    }
+
+    // Replace semantics: a new subscribe() call supersedes any previous one,
+    // so BunkerCore's single startup subscription is always the source of truth.
+    if (this.activeSub) {
+      this.activeSub.closer.close();
+      this.activeSub = null;
+    }
+
+    const id = ++this.subCounter;
+    const closer = this.openSubscription(sub, filter);
+    this.activeSub = { spec: sub, closer, id };
+
+    return {
+      close: () => {
+        // Only close/clear if this subscription is still the active one -
+        // it may already have been replaced by a later subscribe() or
+        // re-pointed at new relays by setRelays().
+        if (this.activeSub?.id === id) {
+          this.activeSub.closer.close();
+          this.activeSub = null;
+        }
+      }
+    };
+  }
+
+  private openSubscription(
+    sub: TransportSubscription,
+    filter: TransportSubscription["filters"][number]
+  ): { close(): void } {
+    for (const url of this.relays) {
+      this.everRelays.add(url);
+    }
+    return this.pool.subscribeMany(this.relays, filter, {
       onevent(event) {
         sub.onEvent({ pubkey: event.pubkey, content: event.content });
       }
     });
-    return { close: () => closer.close() };
   }
 
   async publish(event: SignedEvent): Promise<void> {
@@ -95,8 +135,20 @@ export class SimplePoolTransport implements RelayTransport {
     this.statuses.clear();
     for (const url of this.relays) {
       this.statuses.set(url, { url, connected: false });
+      this.everRelays.add(url);
     }
     this.emitStatuses();
+
+    // Re-point any active subscription at the new relay set so incoming
+    // NIP-46 requests keep arriving after relays are changed at runtime.
+    if (this.activeSub) {
+      const { spec, id } = this.activeSub;
+      this.activeSub.closer.close();
+      const filter = spec.filters[0]!;
+      const closer = this.openSubscription(spec, filter);
+      this.activeSub = { spec, closer, id };
+    }
+
     await this.refreshStatuses();
   }
 
@@ -109,6 +161,10 @@ export class SimplePoolTransport implements RelayTransport {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
-    this.pool.close(this.relays);
+    if (this.activeSub) {
+      this.activeSub.closer.close();
+      this.activeSub = null;
+    }
+    this.pool.close([...this.everRelays]);
   }
 }
