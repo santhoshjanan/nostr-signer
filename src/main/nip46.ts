@@ -4,6 +4,7 @@ import type {
   Nip46Request,
   Nip46Response
 } from "../shared/types.js";
+import { actionTypeForSignEventKind } from "../shared/types.js";
 
 export const NIP46_REQUEST_KIND = 24133;
 
@@ -114,7 +115,7 @@ export function actionTypeOf(method: string, params: string[]): ActionType | nul
       if (event === null) {
         return null;
       }
-      return `sign_event:kind-${event.kind}`;
+      return actionTypeForSignEventKind(event.kind);
     }
     case "nip04_encrypt":
       return "nip04_encrypt";
