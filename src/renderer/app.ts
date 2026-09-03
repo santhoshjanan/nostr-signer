@@ -248,17 +248,21 @@ export async function resolveApproval(choice: "allow-once" | "always-allow" | "d
   showNextApproval();
 }
 
-async function showDashboard(): Promise<void> {
-  hide("onboarding");
-  show("dashboard");
-  const [status, uri, relays] = await Promise.all([
-    api.getStatus(),
-    api.getBunkerUri(),
-    api.getRelays()
-  ]);
+async function refreshBunkerUri(): Promise<void> {
+  const uri = await api.getBunkerUri();
   el<HTMLInputElement>("bunker-uri").value = uri;
   const qrDataUrl = await QRCode.toDataURL(uri, { width: 360, margin: 1 });
   el<HTMLImageElement>("qr").src = qrDataUrl;
+}
+
+async function showDashboard(): Promise<void> {
+  hide("onboarding");
+  show("dashboard");
+  const [status, relays] = await Promise.all([
+    api.getStatus(),
+    api.getRelays(),
+    refreshBunkerUri()
+  ]);
   await renderRelays(status.relays);
   el<HTMLTextAreaElement>("relay-input").value = relays.join("\n");
   await renderClients();
@@ -296,11 +300,51 @@ async function init(): Promise<void> {
   });
 
   el<HTMLButtonElement>("save-relays").addEventListener("click", () => {
-    const urls = el<HTMLTextAreaElement>("relay-input").value
-      .split("\n")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    void api.setRelays(urls);
+    void (async () => {
+      const urls = el<HTMLTextAreaElement>("relay-input").value
+        .split("\n")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      await api.setRelays(urls);
+      await refreshBunkerUri();
+    })();
+  });
+
+  // Two-step arm/confirm: first click arms the reset and re-labels the
+  // button, a second click within the window executes it. Prevents a single
+  // stray click from wiping the vault, without resorting to a native
+  // confirm() dialog or a separate type-to-confirm field.
+  const RESET_CONFIRM_WINDOW_MS = 4000;
+  let resetArmed = false;
+  let resetArmedTimer: ReturnType<typeof setTimeout> | null = null;
+  const resetButton = el<HTMLButtonElement>("factory-reset");
+  const disarmReset = (): void => {
+    resetArmed = false;
+    if (resetArmedTimer !== null) {
+      clearTimeout(resetArmedTimer);
+      resetArmedTimer = null;
+    }
+    resetButton.textContent = "Reset";
+    resetButton.classList.remove("armed");
+  };
+  resetButton.addEventListener("click", () => {
+    if (!resetArmed) {
+      resetArmed = true;
+      resetButton.textContent = "Confirm reset";
+      resetButton.classList.add("armed");
+      resetArmedTimer = setTimeout(disarmReset, RESET_CONFIRM_WINDOW_MS);
+      return;
+    }
+    disarmReset();
+    void (async () => {
+      await api.factoryReset();
+      currentApproval = null;
+      approvalQueue.length = 0;
+      hide("approval-modal");
+      el<HTMLInputElement>("nsec-input").value = "";
+      hide("dashboard");
+      show("onboarding");
+    })();
   });
 
   el<HTMLButtonElement>("approval-allow-once").addEventListener("click", () => {

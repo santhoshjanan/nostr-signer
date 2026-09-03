@@ -1,6 +1,100 @@
+/* Vault antechamber -- direction contract: .impeccable/surfaces/src-renderer-index-html.md */
+
+@font-face {
+  font-family: "Big Shoulders";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/big-shoulders-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Big Shoulders";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/big-shoulders-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Big Shoulders";
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("fonts/big-shoulders-900.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono-600.woff2") format("woff2");
+}
+
 :root {
   color-scheme: light dark;
-  font-family: system-ui, sans-serif;
+
+  --ground: #12161a;
+  --ground-alt: #181d22;
+  --plate: #20262c;
+  --plate-raised: #262d34;
+  --plate-inset: #171b1f;
+  --seam: #3a4148;
+  --seam-light: #4d5761;
+  --text: #dfe4e8;
+  --text-dim: #8d98a1;
+  --brass: #c9a35c;
+  --brass-bright: #e2bd7a;
+  --brass-dim: #6b5732;
+  --brass-ink: #17130a;
+  --red: #b3453d;
+  --red-bright: #d97b73;
+  --red-ink: #2a0e0c;
+  --green: #4c8f68;
+  --green-bright: #86c29e;
+  --green-ink: #0a1a11;
+  --shadow: rgba(0, 0, 0, 0.55);
+  --focus: #e2bd7a;
+
+  font-family: "Big Shoulders", "Arial Narrow", sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --ground: #d7dadb;
+    --ground-alt: #cdd0d1;
+    --plate: #e8e9e9;
+    --plate-raised: #f1f1f1;
+    --plate-inset: #c7cacb;
+    --seam: #9aa0a4;
+    --seam-light: #b7bcbf;
+    --text: #1a1d1f;
+    --text-dim: #52585c;
+    --brass: #8a6a2e;
+    --brass-bright: #a9853f;
+    --brass-dim: #cbb27c;
+    --brass-ink: #fff9ee;
+    --red: #9c3a33;
+    --red-bright: #7c2a25;
+    --red-ink: #fff2f0;
+    --green: #3f7a58;
+    --green-bright: #2c5b41;
+    --green-ink: #eefaf3;
+    --shadow: rgba(20, 22, 23, 0.25);
+    --focus: #8a6a2e;
+  }
 }
 
 /* The [hidden] attribute is hidden only by the UA stylesheet's
@@ -13,48 +107,203 @@
   display: none !important;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--ground);
+}
+
 body {
   margin: 0 auto;
   max-width: 760px;
-  padding: 1rem;
+  padding: 1.5rem 1rem 3rem;
+  background: var(--ground);
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+::selection {
+  background: var(--brass);
+  color: var(--brass-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--ground-alt);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--seam-light);
+  border-radius: 6px;
+}
+
+/* -- Riveted steel plate: the one panel motif every section shares -- */
+.plate,
+header,
+section,
+.banner,
+.modal-card {
+  position: relative;
+  background: var(--plate);
+  border: 1px solid var(--seam);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 0 0 2px var(--ground),
+    0 8px 18px -6px var(--shadow);
+  background-image:
+    radial-gradient(circle at 11px 11px, var(--seam-light) 0 1.4px, transparent 2px),
+    radial-gradient(circle at calc(100% - 11px) 11px, var(--seam-light) 0 1.4px, transparent 2px),
+    radial-gradient(circle at 11px calc(100% - 11px), var(--seam-light) 0 1.4px, transparent 2px),
+    radial-gradient(circle at calc(100% - 11px) calc(100% - 11px), var(--seam-light) 0 1.4px, transparent 2px);
+  background-repeat: no-repeat;
+}
+
+header {
+  margin-bottom: 1.5rem;
+  padding: 0.9rem 1.5rem;
 }
 
 h1 {
-  font-size: 1.25rem;
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: var(--brass-bright);
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08),
+    0 -1px 1px rgba(0, 0, 0, 0.6);
 }
 
 h2 {
-  font-size: 1rem;
-  margin-bottom: 0.25rem;
+  margin: 0 0 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--seam);
+  padding-bottom: 0.4rem;
 }
 
 section {
   margin-bottom: 1.25rem;
+  padding: 1.4rem 1.5rem 1.5rem;
+}
+
+p {
+  margin: 0 0 0.75rem;
+  color: var(--text);
 }
 
 .row {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
   align-items: center;
+}
+
+/* A bare input/textarea sitting directly in a section (not inside a .row)
+   has nothing to give it breathing room from the copy above or the button
+   row below -- e.g. #nsec-input on the onboarding screen. */
+section > input,
+section > textarea {
+  display: block;
+  margin: 0.9rem 0 1.1rem;
 }
 
 input,
 textarea {
+  width: 100%;
   flex: 1;
-  font-family: monospace;
-  padding: 0.4rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  padding: 0.55rem 0.65rem;
+  background: var(--plate-inset);
+  color: var(--text);
+  border: 1px solid var(--seam);
+  border-radius: 6px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+  caret-color: var(--brass-bright);
 }
 
+input:disabled,
+textarea:disabled {
+  opacity: 0.5;
+}
+
+/* -- Stamped brass lever: the button voice everywhere -- */
 button {
-  padding: 0.4rem 0.8rem;
+  --btn: var(--brass);
+  --btn-bright: var(--brass-bright);
+  --btn-ink: var(--brass-ink);
+  font-family: "Big Shoulders", sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  padding: 0.55rem 1rem;
   cursor: pointer;
+  color: var(--btn-ink);
+  background: linear-gradient(180deg, var(--btn-bright), var(--btn));
+  border: 1px solid var(--brass-dim);
+  border-radius: 6px;
+  box-shadow:
+    0 2px 0 var(--brass-dim),
+    0 5px 10px -2px var(--shadow);
+  transition:
+    transform 90ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 90ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+button:hover {
+  filter: brightness(1.05);
+}
+
+button:active {
+  transform: translateY(2px) scale(0.98);
+  box-shadow: 0 0 0 var(--brass-dim);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.4);
+  transform: none;
+  box-shadow: none;
+}
+
+#client-list li button:first-of-type {
+  --btn: var(--red);
+  --btn-bright: var(--red-bright);
+  --btn-ink: var(--red-ink);
+  border-color: color-mix(in srgb, var(--red) 60%, black);
+}
+
+/* -- QR: stamped medallion frame, never a crop that could break the scan -- */
 #qr {
   display: block;
-  margin-top: 0.75rem;
+  margin-top: 0.9rem;
   width: 180px;
   height: 180px;
+  padding: 10px;
+  background: #fff;
+  border: 3px solid var(--brass);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 3px var(--ground),
+    0 0 0 4px var(--seam),
+    0 8px 16px -6px var(--shadow);
 }
 
 ul {
@@ -65,55 +314,235 @@ ul {
 
 li {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
   align-items: center;
-  padding: 0.25rem 0;
-  border-bottom: 1px solid #8883;
-  font-family: monospace;
-  font-size: 0.85rem;
+  padding: 0.45rem 0.1rem;
+  border-bottom: 1px solid var(--seam);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  color: var(--text);
 }
 
-.relay-dot {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  background: #c0392b;
+li:last-child {
+  border-bottom: none;
+}
+
+/* -- Activity: bounded ledger with its own scroll, page never grows with it -- */
+#activity-log.scroll-panel {
+  max-height: 16rem;
+  overflow-y: auto;
+  padding-right: 0.4rem;
+}
+
+/* -- Settings: textarea and Save lever share a bottom-aligned row -- */
+.settings-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+#relay-input {
+  width: 100%;
+  min-height: 6.5rem;
+  max-height: 12rem;
+  resize: none;
+  overflow-y: auto;
+}
+
+.settings-row #save-relays {
   flex: none;
 }
 
+/* -- Danger zone: the one place vault-red owns the whole panel, not just an accent -- */
+#danger-zone-section {
+  border-color: color-mix(in srgb, var(--red) 55%, var(--seam));
+  box-shadow:
+    inset 0 0 0 2px var(--ground),
+    0 0 0 1px color-mix(in srgb, var(--red) 35%, transparent),
+    0 8px 18px -6px var(--shadow);
+}
+
+#danger-zone-section h2 {
+  color: var(--red-bright);
+  border-bottom-color: color-mix(in srgb, var(--red) 40%, var(--seam));
+}
+
+.danger-zone-copy {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.danger-button {
+  --btn: var(--red);
+  --btn-bright: var(--red-bright);
+  --btn-ink: var(--red-ink);
+  border-color: color-mix(in srgb, var(--red) 60%, black);
+}
+
+.danger-button.armed {
+  animation: armed-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes armed-pulse {
+  from {
+    box-shadow:
+      0 2px 0 var(--brass-dim),
+      0 0 0 0 color-mix(in srgb, var(--red) 70%, transparent);
+  }
+  to {
+    box-shadow:
+      0 2px 0 var(--brass-dim),
+      0 0 10px 3px color-mix(in srgb, var(--red) 70%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .danger-button.armed {
+    animation: none;
+  }
+}
+
+#relay-list input,
+#client-list input {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0.2rem;
+}
+
+#relay-list:empty::after,
+#client-list:empty::after,
+#activity-log:empty::after {
+  display: block;
+  padding: 0.4rem 0.1rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+#relay-list:empty::after {
+  content: "No relays configured.";
+}
+#client-list:empty::after {
+  content: "No clients have connected yet.";
+}
+#activity-log:empty::after {
+  content: "No activity yet.";
+}
+
+/* -- Pilot lamps: dim red at rest, brass and pulsing once live -- */
+.relay-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  flex: none;
+  background: var(--red);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.5),
+    0 0 4px 0 var(--red);
+}
+
 .relay-dot.connected {
-  background: #27ae60;
+  background: var(--brass-bright);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.4),
+    0 0 6px 1px var(--brass);
+  animation: lamp-pulse 2.6s ease-in-out infinite alternate;
+}
+
+@keyframes lamp-pulse {
+  from {
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.4),
+      0 0 4px 0 var(--brass);
+  }
+  to {
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.4),
+      0 0 10px 3px var(--brass);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .relay-dot.connected {
+    animation: none;
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.4),
+      0 0 8px 2px var(--brass);
+  }
 }
 
 .error {
-  color: #c0392b;
+  color: var(--red-bright);
 }
 
 .banner {
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1.25rem;
   margin: 0.75rem 0;
-  border: 1px solid #c0392b;
-  border-radius: 4px;
-  background: #c0392b22;
-  font-weight: 600;
+  font-family: "Big Shoulders", sans-serif;
+  font-weight: 700;
+  border-color: var(--red);
+  color: var(--red-bright);
 }
 
+#approval-unpaired-warning {
+  margin: 0.4rem 0 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.8rem;
+  color: var(--red-bright);
+}
+
+#approval-secret {
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0.7rem;
+  background: var(--plate-inset);
+  border: 1px solid var(--seam);
+  border-radius: 6px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--green-bright);
+}
+
+/* -- Approval: a ledger entry that rises from the foot of the page -- */
 #approval-modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
+  padding: 0 1rem;
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .modal-card {
-  background: Canvas;
-  color: CanvasText;
-  padding: 1.5rem;
-  border-radius: 8px;
-  max-width: 480px;
-  width: 90%;
+  width: 100%;
+  max-width: 520px;
+  margin-bottom: 0;
+  padding: 1.5rem 1.6rem;
+  border-radius: 14px 14px 0 0;
+  border-bottom: none;
+  animation: ledger-rise 380ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ledger-rise {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-card {
+    animation: none;
+  }
+}
+
+.modal-card h2 {
+  color: var(--brass-bright);
+  border-bottom-color: var(--seam);
 }
 
 #approval-preview {
@@ -121,6 +550,30 @@ li {
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  background: #8882;
-  padding: 0.5rem;
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--plate-inset);
+  border: 1px solid var(--seam);
+  border-radius: 6px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+  box-shadow: none;
+}
+
+#approval-modal .row {
+  margin-top: 1.1rem;
+}
+
+#approval-always {
+  --btn: var(--green);
+  --btn-bright: var(--green-bright);
+  --btn-ink: var(--green-ink);
+  border-color: color-mix(in srgb, var(--green) 60%, black);
+}
+
+#approval-deny {
+  --btn: var(--red);
+  --btn-bright: var(--red-bright);
+  --btn-ink: var(--red-ink);
+  border-color: color-mix(in srgb, var(--red) 60%, black);
 }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage } from "electron";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomBytes } from "node:crypto";
@@ -126,6 +126,11 @@ function storageDir(): string {
 }
 
 function createWindow(): void {
+  // This app has no File/Edit/View menu commands -- the default Electron
+  // menu bar is dead weight (and a stray "reload"/"toggle devtools" surface
+  // in a signer app). Kill it globally rather than per-window.
+  Menu.setApplicationMenu(null);
+
   mainWindow = new BrowserWindow({
     width: 1024,
     height: 768,
@@ -349,6 +354,19 @@ async function boot(): Promise<void> {
     if (transport) {
       await transport.setRelays(normalized);
     }
+  });
+
+  ipcMain.handle(IPC.FactoryReset, () => {
+    if (transport) {
+      transport.destroy();
+      transport = null;
+    }
+    bunker = null;
+    vault.clear();
+    clients.clear();
+    policy.clear();
+    storage.clearActivityLog();
+    storage.clearRelays();
   });
 }
 

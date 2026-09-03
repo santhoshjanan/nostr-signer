@@ -76,6 +76,17 @@ export class Storage {
     this.writeJsonAtomic("relays.json", relays);
   }
 
+  clearRelays(): void {
+    const path = this.file("relays.json");
+    if (existsSync(path)) {
+      rmSync(path);
+    }
+  }
+
+  clearActivityLog(): void {
+    this.writeJsonAtomic("log.json", []);
+  }
+
   loadKeyBlob(): Uint8Array | null {
     const path = this.file("key");
     if (!existsSync(path)) {

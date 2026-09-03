@@ -55,10 +55,11 @@ describe("shared types", () => {
       "getActivityLog",
       "getRelays",
       "setRelays",
+      "factoryReset",
       "onApprovalRequested",
       "onActivity",
       "onStatusChanged"
     ];
-    expect(apiShape).toHaveLength(16);
+    expect(apiShape).toHaveLength(17);
   });
 });

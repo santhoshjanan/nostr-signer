@@ -65,4 +65,10 @@ export class PolicyEngine {
   isKnownClient(pubkey: string): boolean {
     return this.deps.isClient(pubkey);
   }
+
+  clear(): void {
+    this.rules = [];
+    this.persistedPubkeys.clear();
+    this.deps.saveRules(this.rules);
+  }
 }

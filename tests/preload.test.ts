@@ -36,5 +36,8 @@ describe("preload bridge", () => {
 
     await api.renameClient("pk", "name");
     expect(invokeMock).toHaveBeenCalledWith("signer:rename-client", "pk", "name");
+
+    await api.factoryReset();
+    expect(invokeMock).toHaveBeenCalledWith("signer:factory-reset");
   });
 });

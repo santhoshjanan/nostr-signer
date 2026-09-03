@@ -7,7 +7,7 @@
 // esbuild afterwards overwrites that file with a bundled, browser-ready
 // version so the bundle wins.
 import { build } from "esbuild";
-import { mkdir, copyFile } from "node:fs/promises";
+import { mkdir, copyFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -31,6 +31,13 @@ async function main() {
 
   await copyFile(join(rendererSrc, "index.html"), join(rendererOut, "index.html"));
   await copyFile(join(rendererSrc, "styles.css"), join(rendererOut, "styles.css"));
+
+  const fontsSrc = join(rendererSrc, "fonts");
+  const fontsOut = join(rendererOut, "fonts");
+  await mkdir(fontsOut, { recursive: true });
+  for (const name of await readdir(fontsSrc)) {
+    await copyFile(join(fontsSrc, name), join(fontsOut, name));
+  }
 }
 
 main().catch((err) => {

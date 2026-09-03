@@ -52,4 +52,9 @@ export class ClientRegistry {
     this.clients = this.clients.filter((c) => c.pubkey !== pubkey);
     this.deps.saveClients(this.clients);
   }
+
+  clear(): void {
+    this.clients = [];
+    this.deps.saveClients(this.clients);
+  }
 }

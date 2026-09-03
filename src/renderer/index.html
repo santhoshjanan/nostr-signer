@@ -47,13 +47,28 @@
 
       <section id="activity-section">
         <h2>Activity</h2>
-        <ul id="activity-log"></ul>
+        <ul id="activity-log" class="scroll-panel"></ul>
       </section>
 
       <section id="settings-section">
         <h2>Settings</h2>
-        <textarea id="relay-input" rows="4" placeholder="wss://relay.example.com (one per line)"></textarea>
-        <button id="save-relays">Save relays</button>
+        <div class="settings-row">
+          <textarea
+            id="relay-input"
+            rows="4"
+            placeholder="wss://relay.example.com (one per line)"
+          ></textarea>
+          <button id="save-relays">Save relays</button>
+        </div>
+      </section>
+
+      <section id="danger-zone-section">
+        <h2>Danger zone</h2>
+        <p class="danger-zone-copy">
+          Permanently wipes your signing key, paired clients, activity log, and relay list from
+          this device, then returns you to setup. This cannot be undone.
+        </p>
+        <button id="factory-reset" class="danger-button">Reset</button>
       </section>
     </main>
 

@@ -108,6 +108,7 @@ function makeFakeApi(overrides: Partial<SignerApi> = {}): SignerApi {
     getActivityLog: async () => [] as LogEntry[],
     getRelays: async () => [],
     setRelays: async () => {},
+    factoryReset: vi.fn(async () => {}),
     onApprovalRequested: () => {},
     onActivity: () => {},
     onStatusChanged: () => {},

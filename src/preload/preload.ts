@@ -19,6 +19,7 @@ const api: SignerApi = {
   getActivityLog: () => ipcRenderer.invoke(IPC.GetActivityLog),
   getRelays: () => ipcRenderer.invoke(IPC.GetRelays),
   setRelays: (urls: string[]) => ipcRenderer.invoke(IPC.SetRelays, urls),
+  factoryReset: () => ipcRenderer.invoke(IPC.FactoryReset),
   onApprovalRequested: (cb: (approval: PendingApproval) => void) => {
     ipcRenderer.on(IPC.ApprovalRequested, (_event, approval: PendingApproval) => cb(approval));
   },

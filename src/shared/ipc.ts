@@ -19,6 +19,7 @@ export const IPC = {
   GetActivityLog: "signer:get-activity-log",
   GetRelays: "signer:get-relays",
   SetRelays: "signer:set-relays",
+  FactoryReset: "signer:factory-reset",
   ApprovalRequested: "signer:approval-requested",
   ActivityAppended: "signer:activity-appended",
   StatusChanged: "signer:status-changed"
@@ -44,6 +45,9 @@ export interface SignerApi {
   getActivityLog(): Promise<LogEntry[]>;
   getRelays(): Promise<string[]>;
   setRelays(urls: string[]): Promise<void>;
+  /** Irreversibly clears the signing key, paired clients, activity log, and
+   * saved relays, returning the app to the onboarding (nsec) screen. */
+  factoryReset(): Promise<void>;
   onApprovalRequested(cb: (approval: PendingApproval) => void): void;
   onActivity(cb: (entry: LogEntry) => void): void;
   onStatusChanged(cb: (statuses: RelayStatus[]) => void): void;
