@@ -4,7 +4,9 @@ import * as nip04 from "nostr-tools/nip04";
 import * as nip44 from "nostr-tools/nip44";
 import { BunkerCore, type BunkerDeps } from "../src/main/bunker.js";
 import type {
+  ApprovalChoice,
   LogEntry,
+  PendingApproval,
   RelayStatus,
   RelayTransport,
   SignedEvent,
@@ -352,5 +354,212 @@ describe("BunkerCore", () => {
       sk
     );
     expect(event.pubkey).toBe(getPublicKey(sk));
+  });
+
+  // --- Step 1: approval correlation must not use the client-controlled NIP-46 request id ---
+
+  it("two concurrent connect requests with colliding client-chosen ids never cross-resolve or hang", async () => {
+    const clientSk2 = generateSecretKey();
+    const clientPk2 = getPublicKey(clientSk2);
+
+    const resolvers = new Map<string, (choice: ApprovalChoice) => void>();
+    const seenApprovalIds: string[] = [];
+    const addedClients: string[] = [];
+
+    const { deps, transport } = makeDeps({
+      isClient: () => false,
+      addClient: (pk) => addedClients.push(pk),
+      askApproval: (approval) => {
+        seenApprovalIds.push(approval.id);
+        return new Promise<ApprovalChoice>((resolve) => {
+          resolvers.set(approval.clientPubkey, resolve);
+        });
+      }
+    });
+    const bunker = new BunkerCore(deps);
+    await bunker.start();
+
+    function encryptFrom(sk: Uint8Array, pk: string, payload: object): string {
+      return nip44.v2.encrypt(JSON.stringify(payload), nip44ConversationKey(sk, pk));
+    }
+
+    // Two different clients, same NIP-46 request id "1" -- this is the exact
+    // collision scenario that used to overwrite the first pending entry.
+    transport.inject({
+      pubkey: clientPk,
+      content: encryptFrom(clientSk, signerPk, {
+        id: "1",
+        method: "connect",
+        params: [clientPk, "secret-a"]
+      })
+    });
+    transport.inject({
+      pubkey: clientPk2,
+      content: encryptFrom(clientSk2, signerPk, {
+        id: "1",
+        method: "connect",
+        params: [clientPk2, "secret-b"]
+      })
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Both requests must still be pending -- neither was clobbered, and each
+    // got a distinct signer-generated correlation id despite sharing the
+    // same client-chosen NIP-46 request id.
+    expect(resolvers.size).toBe(2);
+    expect(seenApprovalIds).toHaveLength(2);
+    expect(seenApprovalIds[0]).not.toBe(seenApprovalIds[1]);
+
+    // Resolve out of order to prove there is no cross-resolution.
+    resolvers.get(clientPk2)!("always-allow");
+    resolvers.get(clientPk)!("deny");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(addedClients).toEqual([clientPk2]);
+
+    function decryptResponseFor(
+      pk: string,
+      sk: Uint8Array
+    ): { id: string; result?: string; error?: string } {
+      const event = transport.published.find((e) => e.tags.some((t) => t[0] === "p" && t[1] === pk));
+      if (!event) {
+        throw new Error(`no response published for ${pk}`);
+      }
+      const plaintext = nip44.v2.decrypt(event.content, nip44ConversationKey(sk, signerPk));
+      return JSON.parse(plaintext);
+    }
+
+    // Each NIP-46 response must carry back its own original request id, "1".
+    const respA = decryptResponseFor(clientPk, clientSk);
+    const respB = decryptResponseFor(clientPk2, clientSk2);
+    expect(respA).toEqual({ id: "1", error: "denied by user" });
+    expect(respB).toEqual({ id: "1", result: "ack" });
+  });
+
+  // --- Step 2: approval responses must fail closed ---
+
+  const malformedChoices: unknown[] = [undefined, null, "bogus", { allow: true }];
+
+  for (const bad of malformedChoices) {
+    it(`sign_event denies and signs nothing when askApproval resolves with ${JSON.stringify(bad)}`, async () => {
+      const { deps, transport } = makeDeps({
+        policyDecide: () => "ask",
+        askApproval: async () => bad as unknown as ApprovalChoice
+      });
+      const bunker = new BunkerCore(deps);
+      await bunker.start();
+      const unsigned = JSON.stringify({
+        kind: 1,
+        created_at: 1,
+        tags: [],
+        content: "should not be signed",
+        pubkey: clientPk
+      });
+      await sendRequest(transport, { id: "20", method: "sign_event", params: [unsigned] });
+      const response = await readResponse(transport);
+      expect(response.error).toBe("denied by user");
+      expect(response.result).toBeUndefined();
+      // The only thing published is the denial response -- nothing was signed.
+      expect(transport.published).toHaveLength(1);
+    });
+
+    it(`connect denies and does not add the client when askApproval resolves with ${JSON.stringify(bad)}`, async () => {
+      const added: string[] = [];
+      const { deps, transport } = makeDeps({
+        isClient: () => false,
+        addClient: (pk) => added.push(pk),
+        askApproval: async () => bad as unknown as ApprovalChoice
+      });
+      const bunker = new BunkerCore(deps);
+      await bunker.start();
+      await sendRequest(transport, { id: "21", method: "connect", params: [clientPk, "s"] });
+      const response = await readResponse(transport);
+      expect(response.error).toBe("denied by user");
+      expect(added).toEqual([]);
+    });
+  }
+
+  // --- Step 3: the client-presented pairing secret must be surfaced to the human ---
+
+  it("passes the NIP-46 connect secret through to askApproval as presentedSecret", async () => {
+    let captured: PendingApproval | undefined;
+    const { deps, transport } = makeDeps({
+      isClient: () => false,
+      askApproval: async (approval) => {
+        captured = approval;
+        return "allow-once";
+      }
+    });
+    const bunker = new BunkerCore(deps);
+    await bunker.start();
+    await sendRequest(transport, { id: "30", method: "connect", params: [clientPk, "sekrit-value"] });
+    await readResponse(transport);
+    expect(captured?.presentedSecret).toBe("sekrit-value");
+  });
+
+  it("leaves presentedSecret undefined when the connect request omits it", async () => {
+    let captured: PendingApproval | undefined;
+    const { deps, transport } = makeDeps({
+      isClient: () => false,
+      askApproval: async (approval) => {
+        captured = approval;
+        return "allow-once";
+      }
+    });
+    const bunker = new BunkerCore(deps);
+    await bunker.start();
+    await sendRequest(transport, { id: "31", method: "connect", params: [clientPk] });
+    await readResponse(transport);
+    expect(captured?.presentedSecret).toBeUndefined();
+  });
+
+  // --- Step 3b: distinguish paired vs unpaired requesters in approval prompts ---
+
+  it("flags isPairedClient: true when a known/paired client's sign_event needs a prompt", async () => {
+    let captured: PendingApproval | undefined;
+    const unsigned = JSON.stringify({
+      kind: 1,
+      created_at: 1,
+      tags: [],
+      content: "note",
+      pubkey: clientPk
+    });
+    const { deps, transport } = makeDeps({
+      isClient: () => true,
+      policyDecide: () => "ask",
+      askApproval: async (approval) => {
+        captured = approval;
+        return "allow-once";
+      }
+    });
+    const bunker = new BunkerCore(deps);
+    await bunker.start();
+    await sendRequest(transport, { id: "32", method: "sign_event", params: [unsigned] });
+    await readResponse(transport);
+    expect(captured?.isPairedClient).toBe(true);
+  });
+
+  it("flags isPairedClient: false when an unpaired stranger's sign_event needs a prompt", async () => {
+    let captured: PendingApproval | undefined;
+    const unsigned = JSON.stringify({
+      kind: 1,
+      created_at: 1,
+      tags: [],
+      content: "note",
+      pubkey: clientPk
+    });
+    const { deps, transport } = makeDeps({
+      isClient: () => false,
+      policyDecide: () => "ask",
+      askApproval: async (approval) => {
+        captured = approval;
+        return "allow-once";
+      }
+    });
+    const bunker = new BunkerCore(deps);
+    await bunker.start();
+    await sendRequest(transport, { id: "33", method: "sign_event", params: [unsigned] });
+    await readResponse(transport);
+    expect(captured?.isPairedClient).toBe(false);
   });
 });

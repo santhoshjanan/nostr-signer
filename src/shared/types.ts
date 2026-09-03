@@ -103,6 +103,26 @@ export interface PendingApproval {
   actionType: string;
   description: string;
   eventPreview?: string;
+  /**
+   * The pairing secret as presented by the client (e.g. from the `connect`
+   * request's params). This is untrusted, attacker-controlled text — it is
+   * shown to the human next to the expected secret so they can compare, but
+   * it must never be trusted as a cryptographic gate on its own.
+   */
+  presentedSecret?: string;
+  /**
+   * The pairing secret the signer itself generated/expects for this
+   * connect flow. Rendered next to `presentedSecret` so the human can
+   * visually confirm they match. Not attacker-controlled.
+   */
+  expectedSecret?: string;
+  /**
+   * Whether the requesting client already completed the `connect`
+   * pairing flow (i.e. is a known/paired client) at the time this
+   * approval was raised. Lets the approval UI warn when a request
+   * arrives from a client that skipped pairing entirely.
+   */
+  isPairedClient?: boolean;
 }
 
 export interface SafeStorageLike {

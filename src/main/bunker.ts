@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { finalizeEvent } from "nostr-tools/pure";
 import * as nip04 from "nostr-tools/nip04";
 import * as nip44 from "nostr-tools/nip44";
@@ -187,15 +188,35 @@ export class BunkerCore {
     if (this.deps.isClient(clientPubkey)) {
       return buildResponse(request.id, "ack");
     }
+    // The client-supplied secret (NIP-46 connect params: [remotePubkey, secret, ...])
+    // is untrusted and does not gate anything here. It is surfaced to the human
+    // approving the request so they can compare it against the expected value;
+    // the approval popup itself remains the actual consent moment.
+    const presentedSecret = request.params[1];
     const choice = await this.deps.askApproval({
-      id: request.id,
+      // The correlation id used to match the eventual renderer response must be
+      // generated here, NOT taken from request.id: request.id is chosen by the
+      // remote client and is only unique within that one client's own request
+      // stream, so two different clients can legitimately send the same id and
+      // collide in the ApprovalQueue's pending map.
+      id: randomUUID(),
       clientPubkey,
       clientName: this.deps.clientName(clientPubkey),
       actionType: "connect",
-      description: "New client wants to connect"
+      description: "New client wants to connect",
+      ...(presentedSecret !== undefined ? { presentedSecret } : {})
     });
-    if (choice === "deny") {
-      this.appendLog("client-denied", "Connection denied", { clientPubkey });
+    // Fail closed: only the exact literal "allow-once" or "always-allow" may
+    // permit the connection. Anything else (deny, undefined, malformed values
+    // from a compromised renderer) is treated as a denial.
+    if (choice !== "allow-once" && choice !== "always-allow") {
+      if (choice === "deny") {
+        this.appendLog("client-denied", "Connection denied", { clientPubkey });
+      } else {
+        this.appendLog("protocol-error", "Connection denied: malformed approval choice", {
+          clientPubkey
+        });
+      }
       return buildErrorResponse(request.id, ERR_DENIED);
     }
     this.deps.addClient(clientPubkey);
@@ -207,7 +228,6 @@ export class BunkerCore {
     clientPubkey: string,
     actionType: ActionType,
     description: string,
-    requestId: string,
     eventPreview?: string
   ): Promise<boolean> {
     const decision = this.deps.policyDecide(clientPubkey, actionType);
@@ -218,15 +238,30 @@ export class BunkerCore {
       return false;
     }
     const choice = await this.deps.askApproval({
-      id: requestId,
+      // See handleConnect: this must be a fresh, signer-generated id, never
+      // the client-controlled NIP-46 requestId, or concurrent requests with
+      // colliding client-chosen ids would clobber each other's pending entry.
+      id: randomUUID(),
       clientPubkey,
       clientName: this.deps.clientName(clientPubkey),
       actionType,
       description,
-      eventPreview
+      eventPreview,
+      isPairedClient: this.deps.isClient(clientPubkey)
     });
-    if (choice === "deny") {
-      this.appendLog("request-denied", description, { clientPubkey, actionType });
+    // Fail closed: only "allow-once" and "always-allow" may permit the
+    // action. Every other value -- "deny", undefined, a typo, or an object
+    // injected via a direct ipcRenderer.invoke that bypasses the preload
+    // wrapper -- must deny.
+    if (choice !== "allow-once" && choice !== "always-allow") {
+      if (choice === "deny") {
+        this.appendLog("request-denied", description, { clientPubkey, actionType });
+      } else {
+        this.appendLog("protocol-error", `Malformed approval choice, denying: ${description}`, {
+          clientPubkey,
+          actionType
+        });
+      }
       return false;
     }
     if (choice === "always-allow") {
@@ -250,7 +285,6 @@ export class BunkerCore {
       clientPubkey,
       actionType,
       `Sign kind ${unsigned.kind} event`,
-      request.id,
       unsigned.content.slice(0, 280)
     );
     if (!allowed) {
@@ -277,8 +311,7 @@ export class BunkerCore {
     const allowed = await this.checkPolicy(
       clientPubkey,
       actionType,
-      `${request.method} for ${thirdParty.slice(0, 12)}...`,
-      request.id
+      `${request.method} for ${thirdParty.slice(0, 12)}...`
     );
     if (!allowed) {
       return buildErrorResponse(request.id, ERR_DENIED);
