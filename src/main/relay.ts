@@ -26,6 +26,7 @@ export class SimplePoolTransport implements RelayTransport {
   private statuses = new Map<string, RelayStatus>();
   private statusCb: ((statuses: RelayStatus[]) => void) | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private refreshing = false;
 
   constructor(relays: string[]) {
     this.relays = normalizeRelayUrls(relays);
@@ -35,24 +36,36 @@ export class SimplePoolTransport implements RelayTransport {
   }
 
   async connect(): Promise<void> {
+    if (this.pollTimer !== null) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
     this.pollTimer = setInterval(() => this.refreshStatuses(), 2000);
     await this.refreshStatuses();
   }
 
   private async refreshStatuses(): Promise<void> {
-    for (const url of this.relays) {
-      let connected = false;
-      try {
-        const relay = await this.pool.ensureRelay(url, { connectionTimeout: 3000 });
-        connected = relay.connected;
-      } catch {
-        connected = false;
+    if (this.refreshing) {
+      return;
+    }
+    this.refreshing = true;
+    try {
+      for (const url of this.relays) {
+        let connected = false;
+        try {
+          const relay = await this.pool.ensureRelay(url, { connectionTimeout: 3000 });
+          connected = relay.connected;
+        } catch {
+          connected = false;
+        }
+        const prev = this.statuses.get(url);
+        if (!prev || prev.connected !== connected) {
+          this.statuses.set(url, { url, connected });
+          this.emitStatuses();
+        }
       }
-      const prev = this.statuses.get(url);
-      if (!prev || prev.connected !== connected) {
-        this.statuses.set(url, { url, connected });
-        this.emitStatuses();
-      }
+    } finally {
+      this.refreshing = false;
     }
   }
 
