@@ -1,0 +1,107 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0 auto;
+  max-width: 760px;
+  padding: 1rem;
+}
+
+h1 {
+  font-size: 1.25rem;
+}
+
+h2 {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+section {
+  margin-bottom: 1.25rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+input,
+textarea {
+  flex: 1;
+  font-family: monospace;
+  padding: 0.4rem;
+}
+
+button {
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+#qr {
+  display: block;
+  margin-top: 0.75rem;
+  width: 180px;
+  height: 180px;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid #8883;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.relay-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: #c0392b;
+  flex: none;
+}
+
+.relay-dot.connected {
+  background: #27ae60;
+}
+
+.error {
+  color: #c0392b;
+}
+
+#approval-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-card {
+  background: Canvas;
+  color: CanvasText;
+  padding: 1.5rem;
+  border-radius: 8px;
+  max-width: 480px;
+  width: 90%;
+}
+
+#approval-preview {
+  max-height: 8rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #8882;
+  padding: 0.5rem;
+}
