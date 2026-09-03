@@ -328,6 +328,23 @@ describe("BunkerCore", () => {
     expect(event.tags.some((t) => t[0] === "p" && t[1] === clientPk)).toBe(true);
   });
 
+  it("survives getSecretKey throwing without an unhandled rejection", async () => {
+    const { deps, transport, log } = makeDeps({
+      getSecretKey: () => {
+        throw new Error("key not loaded");
+      }
+    });
+    const bunker = new BunkerCore(deps);
+    await bunker.start();
+    // Inject an event; handleEvent is fire-and-forget. If getSecretKey throws
+    // outside a try, this would produce an unhandled rejection. Flush microtasks.
+    transport.inject({ pubkey: clientPk, content: "anything" });
+    await new Promise((r) => setTimeout(r, 10));
+    // Nothing published, error logged, no crash.
+    expect(transport.published).toHaveLength(0);
+    expect(log.some((e) => e.type === "request-dropped")).toBe(true);
+  });
+
   it("finalizes events deterministically through finalizeEvent sanity check", () => {
     const sk = generateSecretKey();
     const event = finalizeEvent(

@@ -9,6 +9,7 @@ import {
   parseUnsignedEvent,
   NIP46_REQUEST_KIND
 } from "./nip46.js";
+import { actionTypeForSignEventKind } from "../shared/types.js";
 import type {
   ActionType,
   ApprovalChoice,
@@ -73,51 +74,57 @@ export class BunkerCore {
   }
 
   private async handleEvent(eventPubkey: string, content: string): Promise<void> {
-    let plaintext: string;
-    let scheme: "nip44" | "nip04";
-    const secretKey = this.deps.getSecretKey();
     try {
-      plaintext = nip44.v2.decrypt(content, conversationKey(secretKey, eventPubkey));
-      scheme = "nip44";
-    } catch {
+      let plaintext: string;
+      let scheme: "nip44" | "nip04";
+      const secretKey = this.deps.getSecretKey();
       try {
-        plaintext = await nip04.decrypt(secretKey, eventPubkey, content);
-        scheme = "nip04";
+        plaintext = nip44.v2.decrypt(content, conversationKey(secretKey, eventPubkey));
+        scheme = "nip44";
       } catch {
-        this.appendLog("request-dropped", "Undecryptable request dropped", {
+        try {
+          plaintext = await nip04.decrypt(secretKey, eventPubkey, content);
+          scheme = "nip04";
+        } catch {
+          this.appendLog("request-dropped", "Undecryptable request dropped", {
+            clientPubkey: eventPubkey
+          });
+          return;
+        }
+      }
+
+      const parsed = parseRequestEvent(
+        {
+          kind: NIP46_REQUEST_KIND,
+          pubkey: eventPubkey,
+          content: plaintext,
+          tags: [["p", this.deps.signerPubkey]]
+        },
+        this.deps.signerPubkey
+      );
+      if (parsed === null) {
+        this.appendLog("request-dropped", "Malformed request payload dropped", {
           clientPubkey: eventPubkey
         });
         return;
       }
-    }
 
-    const parsed = parseRequestEvent(
-      {
-        kind: NIP46_REQUEST_KIND,
-        pubkey: eventPubkey,
-        content: plaintext,
-        tags: [["p", this.deps.signerPubkey]]
-      },
-      this.deps.signerPubkey
-    );
-    if (parsed === null) {
-      this.appendLog("request-dropped", "Malformed request payload dropped", {
+      let response: Nip46Response;
+      try {
+        response = await this.dispatch(parsed.clientPubkey, parsed.request);
+      } catch {
+        response = buildErrorResponse(parsed.request.id, "internal error");
+      }
+      try {
+        await this.publishResponse(parsed.clientPubkey, response, scheme);
+      } catch {
+        this.appendLog("protocol-error", "Failed to publish response (relays unreachable)", {
+          clientPubkey: parsed.clientPubkey
+        });
+      }
+    } catch {
+      this.appendLog("request-dropped", "Unexpected error handling request", {
         clientPubkey: eventPubkey
-      });
-      return;
-    }
-
-    let response: Nip46Response;
-    try {
-      response = await this.dispatch(parsed.clientPubkey, parsed.request);
-    } catch {
-      response = buildErrorResponse(parsed.request.id, "internal error");
-    }
-    try {
-      await this.publishResponse(parsed.clientPubkey, response, scheme);
-    } catch {
-      this.appendLog("protocol-error", "Failed to publish response (relays unreachable)", {
-        clientPubkey: parsed.clientPubkey
       });
     }
   }
@@ -238,10 +245,7 @@ export class BunkerCore {
     if (unsigned === null) {
       return buildErrorResponse(request.id, "invalid event");
     }
-    const actionType = actionTypeOf("sign_event", request.params);
-    if (actionType === null) {
-      return buildErrorResponse(request.id, "invalid event");
-    }
+    const actionType = actionTypeForSignEventKind(unsigned.kind);
     const allowed = await this.checkPolicy(
       clientPubkey,
       actionType,
