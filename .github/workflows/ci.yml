@@ -13,10 +13,13 @@ concurrency:
 
 jobs:
   build-and-test:
-    # This app is Windows-only (electron-builder is configured with win-only
-    # targets), so CI runs on the same platform it ships for rather than
-    # ubuntu-latest.
-    runs-on: windows-latest
+    # electron-builder now packages win/mac/linux dir targets, so CI verifies
+    # all three shipped platforms rather than just the one this was built on.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -43,6 +46,6 @@ jobs:
       - name: Upload build output
         uses: actions/upload-artifact@v4
         with:
-          name: out-${{ github.sha }}
+          name: out-${{ matrix.os }}-${{ github.sha }}
           path: out/
           retention-days: 7

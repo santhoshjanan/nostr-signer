@@ -8,9 +8,22 @@ on:
 
 jobs:
   package:
-    # See the comment in ci.yml: match this label to your registered
-    # Windows Gitea Actions runner.
-    runs-on: windows-latest
+    # See the comment in ci.yml: match these labels to your registered
+    # runners, or trim the matrix if only some platforms have one.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            dist_dir: dist/win-unpacked
+            asset_name: nostr-signer-${{ gitea.ref_name }}-win.zip
+          - os: macos-latest
+            dist_dir: dist/mac
+            asset_name: nostr-signer-${{ gitea.ref_name }}-mac.zip
+          - os: ubuntu-latest
+            dist_dir: dist/linux-unpacked
+            asset_name: nostr-signer-${{ gitea.ref_name }}-linux.zip
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -34,25 +47,32 @@ jobs:
       - name: Build distributable
         run: npm run dist
 
-      - name: Zip distributable
+      - name: Zip distributable (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path dist/win-unpacked/* -DestinationPath nostr-signer-${{ gitea.ref_name }}-win.zip
+        run: Compress-Archive -Path "${{ matrix.dist_dir }}/*" -DestinationPath "${{ matrix.asset_name }}"
+
+      - name: Zip distributable (macOS/Linux)
+        if: runner.os != 'Windows'
+        run: (cd "${{ matrix.dist_dir }}" && zip -r -y "../../${{ matrix.asset_name }}" .)
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nostr-signer-${{ gitea.ref_name }}-win
-          path: nostr-signer-${{ gitea.ref_name }}-win.zip
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
           retention-days: 30
 
       # Gitea has no native equivalent of softprops/action-gh-release; this
       # third-party action talks to the Gitea API instead. Verify it (or swap
       # in whatever release action your Gitea version/instance prefers)
       # before relying on it -- the action ecosystem here is less
-      # standardized than GitHub's.
+      # standardized than GitHub's. Each matrix job uploads its own asset to
+      # the same tag's release; confirm your Gitea instance's release API
+      # appends rather than replaces assets across repeated calls.
       - name: Create Gitea release
         uses: akkuman/gitea-release-action@v1
         with:
-          files: nostr-signer-${{ gitea.ref_name }}-win.zip
+          files: ${{ matrix.asset_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}

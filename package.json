@@ -2,7 +2,7 @@
   "name": "nostr-signer",
   "version": "0.1.0",
   "private": true,
-  "description": "Personal NIP-46 Nostr remote signer (bunker) for Windows",
+  "description": "Personal NIP-46 Nostr remote signer (bunker) for Windows, macOS, and Linux",
   "main": "out/main/index.js",
   "type": "module",
   "scripts": {
@@ -41,6 +41,14 @@
     ],
     "win": {
       "target": "dir"
+    },
+    "mac": {
+      "target": "dir",
+      "category": "public.app-category.utilities"
+    },
+    "linux": {
+      "target": "dir",
+      "category": "Utility"
     },
     "asar": false
   }

@@ -1,6 +1,8 @@
 # Nostr Signer
 
-A personal NIP-46 remote signer ("bunker") for Windows. Your nsec is encrypted at rest with Windows DPAPI (via Electron `safeStorage`) and only ever exists in the main process's memory. Web clients connect by pasting the `bunker://` URI shown in the app.
+A personal NIP-46 remote signer ("bunker") for Windows, macOS, and Linux. Your nsec is encrypted at rest via Electron `safeStorage` (Windows DPAPI, macOS Keychain, or the Linux Secret Service/libsecret keyring) and only ever exists in the main process's memory. Web clients connect by pasting the `bunker://` URI shown in the app.
+
+Linux needs a running Secret Service provider (GNOME Keyring, KWallet, etc.) for `safeStorage` to have anywhere to store the key — headless/no-keyring setups will fail to encrypt.
 
 ## Develop
 
@@ -21,7 +23,7 @@ npm test           # vitest: unit + protocol + e2e (BunkerSigner through a mock 
 npm run dist       # electron-builder --dir
 ```
 
-Output: `dist\win-unpacked\` containing `Nostr Signer.exe` and resources. Run in place or copy the folder anywhere.
+Output (unpacked, no installer, on every platform): `dist\win-unpacked\` (`Nostr Signer.exe`), `dist/mac/` (`Nostr Signer.app`), or `dist/linux-unpacked/` (`nostr-signer`) depending on the OS you build on — electron-builder does not cross-compile the `dir` target, so build on the platform you're packaging for. Run in place or copy the folder anywhere.
 
 `npm run build` (which `dist`/`dev` both run first) does two steps, in order:
 
@@ -42,9 +44,9 @@ Run it with `ELECTRON_RUN_AS_NODE` unset (see Troubleshooting below) — it need
 
 ## Data location
 
-`%APPDATA%\nostr-signer\`:
+`app.getPath("appData")/nostr-signer/` — `%APPDATA%\nostr-signer\` on Windows, `~/Library/Application Support/nostr-signer/` on macOS, `~/.config/nostr-signer/` on Linux:
 
-- `key` — DPAPI-encrypted nsec (base64). Useless if copied to another Windows account/machine.
+- `key` — encrypted nsec (base64), via `safeStorage`. Useless if copied to another user account/machine/OS — the encryption key never leaves the OS keychain it was created under.
 - `clients.json` — known client pubkeys, friendly names, connected-at.
 - `rules.json` — persisted "always allow" rules (client pubkey + action type).
 - `log.json` — activity log (capped at 1000 entries).

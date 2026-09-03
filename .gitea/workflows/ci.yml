@@ -9,12 +9,17 @@ on:
 
 jobs:
   build-and-test:
-    # This app is Windows-only (electron-builder is configured with win-only
-    # targets). "windows-latest" only resolves if a self-hosted Gitea Actions
-    # runner in this instance is registered with that label -- check
-    # act_runner's config.yaml (runner.labels) and adjust this value to match
-    # whatever label your Windows runner actually advertises.
-    runs-on: windows-latest
+    # electron-builder now packages win/mac/linux dir targets. "-latest"
+    # labels only resolve if self-hosted Gitea Actions runners in this
+    # instance are registered under those labels for each OS -- check
+    # act_runner's config.yaml (runner.labels) and adjust matrix.os to
+    # whatever labels your runners actually advertise. If only a Windows
+    # runner exists, trim the matrix back to that single entry.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -41,6 +46,6 @@ jobs:
       - name: Upload build output
         uses: actions/upload-artifact@v4
         with:
-          name: out-${{ gitea.sha }}
+          name: out-${{ matrix.os }}-${{ gitea.sha }}
           path: out/
           retention-days: 7
