@@ -3,6 +3,16 @@
   font-family: system-ui, sans-serif;
 }
 
+/* The [hidden] attribute is hidden only by the UA stylesheet's
+   [hidden]{display:none}, which loses to any author 'display' rule -- e.g.
+   #approval-modal{display:flex} below. Without this guard such an element is
+   painted even when logically hidden, and every el.hidden = true in app.ts
+   becomes a silent no-op. Author-level + !important so it wins regardless of
+   the specificity of whatever display rule an element also carries. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0 auto;
   max-width: 760px;
@@ -77,6 +87,15 @@ li {
 
 .error {
   color: #c0392b;
+}
+
+.banner {
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  border: 1px solid #c0392b;
+  border-radius: 4px;
+  background: #c0392b22;
+  font-weight: 600;
 }
 
 #approval-modal {

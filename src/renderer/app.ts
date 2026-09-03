@@ -104,6 +104,94 @@ async function renderActivity(): Promise<void> {
 }
 
 let currentApproval: PendingApproval | null = null;
+const approvalQueue: PendingApproval[] = [];
+
+// Malicious/oversized secrets must not be able to blow up the modal layout.
+const MAX_PRESENTED_SECRET_LEN = 200;
+
+// index.html does not (yet) ship an #approval-secret element. Create it
+// lazily and attach it next to the action description so the pairing
+// secret comparison works without requiring an index.html change.
+function ensureSecretElement(): HTMLElement {
+  const existing = document.getElementById("approval-secret");
+  if (existing) {
+    return existing as HTMLElement;
+  }
+  const node = document.createElement("p");
+  node.id = "approval-secret";
+  const anchor = el<HTMLElement>("approval-action");
+  anchor.parentElement?.appendChild(node);
+  return node;
+}
+
+function truncateSecret(value: string): string {
+  return value.length > MAX_PRESENTED_SECRET_LEN
+    ? `${value.slice(0, MAX_PRESENTED_SECRET_LEN)}…`
+    : value;
+}
+
+// index.html does not ship an #approval-unpaired-warning element either;
+// create it lazily next to the client line so it survives without an
+// index.html change, matching the #approval-secret approach above.
+function ensureUnpairedWarningElement(): HTMLElement {
+  const existing = document.getElementById("approval-unpaired-warning");
+  if (existing) {
+    return existing as HTMLElement;
+  }
+  const node = document.createElement("p");
+  node.id = "approval-unpaired-warning";
+  const anchor = el<HTMLElement>("approval-client");
+  anchor.parentElement?.appendChild(node);
+  return node;
+}
+
+function renderUnpairedWarning(approval: PendingApproval): void {
+  const node = ensureUnpairedWarningElement();
+  // Only meaningful once a client is known one way or the other; a `connect`
+  // approval is always from an as-yet-unpaired client, so showing this next
+  // to it would just be noise -- it's covered by the approval itself.
+  if (approval.actionType !== "connect" && approval.isPairedClient === false) {
+    node.textContent = "⚠ Unpaired client — has not completed pairing";
+    node.hidden = false;
+  } else {
+    node.textContent = "";
+    node.hidden = true;
+  }
+}
+
+// Only render the presented-vs-expected secret comparison for `connect`
+// approvals where a secret is actually in play -- routine sign_event/nip04
+// prompts have no secret and showing an empty comparison block there would
+// just be clutter.
+function renderPresentedSecret(approval: PendingApproval): void {
+  const node = ensureSecretElement();
+  const hasSecretContext =
+    approval.actionType === "connect" &&
+    (approval.presentedSecret !== undefined || approval.expectedSecret !== undefined);
+  if (!hasSecretContext) {
+    node.textContent = "";
+    node.hidden = true;
+    return;
+  }
+
+  const presentedText = approval.presentedSecret
+    ? `Presented secret: ${truncateSecret(approval.presentedSecret)}`
+    : "Presented secret: (none)";
+  const expectedText = approval.expectedSecret
+    ? `Expected secret: ${truncateSecret(approval.expectedSecret)}`
+    : "Expected secret: (unknown)";
+  let matchText: string;
+  if (approval.presentedSecret !== undefined && approval.expectedSecret !== undefined) {
+    matchText = approval.presentedSecret === approval.expectedSecret ? "✓ Secrets match" : "⚠ MISMATCH";
+  } else {
+    matchText = "Cannot compare: a secret is missing";
+  }
+
+  // A single textContent assignment (never innerHTML) keeps the untrusted
+  // presentedSecret from ever being interpreted as markup.
+  node.textContent = `${presentedText}\n${expectedText}\n${matchText}`;
+  node.hidden = false;
+}
 
 function showApproval(approval: PendingApproval): void {
   currentApproval = approval;
@@ -117,10 +205,38 @@ function showApproval(approval: PendingApproval): void {
   } else {
     preview.hidden = true;
   }
+  renderPresentedSecret(approval);
+  renderUnpairedWarning(approval);
   show("approval-modal");
 }
 
-async function resolveApproval(choice: "allow-once" | "always-allow" | "deny"): Promise<void> {
+function showNextApproval(): void {
+  if (currentApproval) {
+    return;
+  }
+  const next = approvalQueue.shift();
+  if (!next) {
+    return;
+  }
+  showApproval(next);
+}
+
+/** Queue an incoming approval request; a second request while one is already
+ * showing no longer overwrites it -- it waits its turn (FIFO). */
+export function enqueueApproval(approval: PendingApproval): void {
+  approvalQueue.push(approval);
+  showNextApproval();
+}
+
+export function pendingApprovalCount(): number {
+  return approvalQueue.length + (currentApproval ? 1 : 0);
+}
+
+export function peekCurrentApproval(): PendingApproval | null {
+  return currentApproval;
+}
+
+export async function resolveApproval(choice: "allow-once" | "always-allow" | "deny"): Promise<void> {
   const approval = currentApproval;
   if (!approval) {
     return;
@@ -129,6 +245,7 @@ async function resolveApproval(choice: "allow-once" | "always-allow" | "deny"): 
   hide("approval-modal");
   await api.respondApproval(approval.id, choice);
   await renderClients();
+  showNextApproval();
 }
 
 async function showDashboard(): Promise<void> {
@@ -197,7 +314,7 @@ async function init(): Promise<void> {
   });
 
   api.onApprovalRequested((approval) => {
-    showApproval(approval);
+    enqueueApproval(approval);
   });
   api.onActivity((entry) => {
     appendActivity(entry);
@@ -207,6 +324,20 @@ async function init(): Promise<void> {
   });
 }
 
+// A startup failure here (e.g. the preload script failed to expose
+// `window.signerApi`, or any of the initial IPC calls in init() rejects)
+// must never fail silently: an unhandled rejection leaves the page showing
+// only the bare header, which is visually indistinguishable from the
+// renderer-bundling regression this was written to catch. Surface it.
+export function showFatalError(message: string): void {
+  const node = el<HTMLElement>("app-error");
+  node.textContent = `Failed to start: ${message}`;
+  node.hidden = false;
+}
+
 if (typeof document !== "undefined") {
-  void init();
+  void init().catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    showFatalError(message);
+  });
 }
