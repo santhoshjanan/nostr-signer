@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomBytes } from "node:crypto";
 import { generateSecretKey, getPublicKey } from "nostr-tools/pure";
 import * as nip19 from "nostr-tools/nip19";
@@ -45,6 +45,77 @@ export function describeAction(actionType: string): string {
   }
 }
 
+export function isValidPubkeyHex(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+}
+
+export function validatePubkeyHex(value: unknown): string {
+  if (!isValidPubkeyHex(value)) {
+    throw new Error("invalid pubkey: expected a string of exactly 64 lowercase hex characters");
+  }
+  return value;
+}
+
+export const MAX_CLIENT_NAME_LENGTH = 128;
+
+export function validateClientName(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new Error("invalid client name: expected a string");
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error("invalid client name: must not be empty");
+  }
+  if (trimmed.length > MAX_CLIENT_NAME_LENGTH) {
+    throw new Error(`invalid client name: must be at most ${MAX_CLIENT_NAME_LENGTH} characters`);
+  }
+  return trimmed;
+}
+
+export function validateApprovalId(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("invalid approval id: expected a non-empty string");
+  }
+  return value;
+}
+
+const APPROVAL_CHOICES = new Set(["allow-once", "always-allow", "deny"]);
+
+export function validateApprovalChoice(value: unknown): "allow-once" | "always-allow" | "deny" {
+  if (typeof value !== "string" || !APPROVAL_CHOICES.has(value)) {
+    throw new Error('invalid approval choice: expected "allow-once" | "always-allow" | "deny"');
+  }
+  return value as "allow-once" | "always-allow" | "deny";
+}
+
+export function validateNsec(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new Error("invalid nsec: expected a string");
+  }
+  return value;
+}
+
+export const MAX_RELAY_COUNT = 20;
+
+export function validateRelayUrlsInput(value: unknown): string[] {
+  if (!Array.isArray(value) || !value.every((v): v is string => typeof v === "string")) {
+    throw new Error("invalid relays: expected an array of strings");
+  }
+  if (value.length > MAX_RELAY_COUNT) {
+    throw new Error(`invalid relays: too many relays (max ${MAX_RELAY_COUNT})`);
+  }
+  return value;
+}
+
+export function ensureNonEmptyRelays(normalized: string[]): string[] {
+  if (normalized.length === 0) {
+    throw new Error(
+      "invalid relays: none of the provided urls were valid wss:// relay urls; relay list left unchanged"
+    );
+  }
+  return normalized;
+}
+
 let mainWindow: BrowserWindow | null = null;
 let pairingSecret = randomBytes(16).toString("hex");
 let bunker: BunkerCore | null = null;
@@ -62,10 +133,48 @@ function createWindow(): void {
       preload: join(__dirname, "../preload/preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      // sandbox MUST stay false: the preload script is compiled as ESM, and
+      // Electron only supports an ESM preload when the sandbox is disabled.
+      // Do not "fix" this without switching the preload build to CJS first.
       sandbox: false
     }
   });
-  void mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
+
+  const indexPath = join(__dirname, "../renderer/index.html");
+  const indexUrl = pathToFileURL(indexPath).href;
+
+  // Never let the renderer navigate this window (or a window it opens) away
+  // from the local app bundle to a remote URL.
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (url !== indexUrl) {
+      event.preventDefault();
+    }
+  });
+
+  mainWindow.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL) => {
+      console.error("Renderer failed to load:", errorCode, errorDescription, validatedURL);
+      dialog.showErrorBox(
+        "Nostr Signer failed to load",
+        `The app window failed to load its interface.\n\nCode: ${errorCode}\n${errorDescription}\nURL: ${validatedURL}`
+      );
+    }
+  );
+
+  // NOTE: kept as an inline `join(__dirname, ...)` expression (matching
+  // `indexPath` above) because tests/build-artifacts.test.ts locates this
+  // literal via regex to verify the build output resolves correctly.
+  mainWindow.loadFile(join(__dirname, "../renderer/index.html")).catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Failed to load renderer:", message);
+    dialog.showErrorBox(
+      "Nostr Signer failed to load",
+      `The app window failed to load its interface.\n\n${message}`
+    );
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -84,7 +193,7 @@ function flashWindow(): void {
   }
 }
 
-async function startBunker(
+export async function startBunker(
   vault: KeyVault,
   storage: Storage,
   clients: ClientRegistry,
@@ -95,14 +204,14 @@ async function startBunker(
     return;
   }
   const relayUrls = normalizeRelayUrls(storage.loadRelays() ?? DEFAULT_RELAYS);
-  transport = new SimplePoolTransport(relayUrls);
-  transport.onStatusChange((statuses) => {
+  const candidateTransport = new SimplePoolTransport(relayUrls);
+  candidateTransport.onStatusChange((statuses) => {
     sendToRenderer(IPC.StatusChanged, statuses);
   });
-  bunker = new BunkerCore({
+  const candidateBunker = new BunkerCore({
     signerPubkey: vault.getPublicKeyHex(),
     getSecretKey: () => vault.getSecretKey(),
-    transport,
+    transport: candidateTransport,
     isClient: (pk) => clients.isClient(pk),
     addClient: (pk) => {
       clients.addClient(pk);
@@ -116,7 +225,8 @@ async function startBunker(
         description:
           approval.actionType === "connect"
             ? "New client wants to connect"
-            : describeAction(approval.actionType)
+            : describeAction(approval.actionType),
+        ...(approval.actionType === "connect" ? { expectedSecret: pairingSecret } : {})
       };
       flashWindow();
       return approvals.request(described);
@@ -126,7 +236,19 @@ async function startBunker(
       sendToRenderer(IPC.ActivityAppended, entry);
     }
   });
-  await bunker.start();
+
+  // Only publish `bunker`/`transport` to module state once start() has
+  // actually succeeded. If we assigned them beforehand and start() threw,
+  // the `if (bunker !== null) return;` guard above would wedge the signer
+  // for the rest of the session with no way to retry short of a restart.
+  try {
+    await candidateBunker.start();
+  } catch (err) {
+    candidateTransport.destroy();
+    throw err;
+  }
+  bunker = candidateBunker;
+  transport = candidateTransport;
 }
 
 async function boot(): Promise<void> {
@@ -162,6 +284,9 @@ async function boot(): Promise<void> {
   });
 
   ipcMain.handle(IPC.GetBunkerUri, (): string => {
+    if (!vault.hasKey()) {
+      throw new Error("no key configured yet; complete onboarding first");
+    }
     const relayUrls = transport
       ? transport.getStatuses().map((s) => s.url)
       : normalizeRelayUrls(relays);
@@ -170,7 +295,8 @@ async function boot(): Promise<void> {
 
   ipcMain.handle(IPC.HasKey, () => vault.hasKey());
 
-  ipcMain.handle(IPC.ImportKey, async (_event, nsec: string) => {
+  ipcMain.handle(IPC.ImportKey, async (_event, rawNsec: unknown) => {
+    const nsec = validateNsec(rawNsec);
     const decoded = nip19.decode(nsec);
     if (decoded.type !== "nsec") {
       throw new Error("expected an nsec1... key");
@@ -189,20 +315,26 @@ async function boot(): Promise<void> {
 
   ipcMain.handle(IPC.ListClients, () => clients.list());
 
-  ipcMain.handle(IPC.RenameClient, (_event, pubkey: string, name: string) => {
+  ipcMain.handle(IPC.RenameClient, (_event, rawPubkey: unknown, rawName: unknown) => {
+    const pubkey = validatePubkeyHex(rawPubkey);
+    const name = validateClientName(rawName);
     clients.rename(pubkey, name);
   });
 
-  ipcMain.handle(IPC.RevokeClient, (_event, pubkey: string) => {
+  ipcMain.handle(IPC.RevokeClient, (_event, rawPubkey: unknown) => {
+    const pubkey = validatePubkeyHex(rawPubkey);
     clients.remove(pubkey);
     policy.forgetRulesFor(pubkey);
   });
 
-  ipcMain.handle(IPC.ResetClientApprovals, (_event, pubkey: string) => {
+  ipcMain.handle(IPC.ResetClientApprovals, (_event, rawPubkey: unknown) => {
+    const pubkey = validatePubkeyHex(rawPubkey);
     policy.forgetRulesFor(pubkey);
   });
 
-  ipcMain.handle(IPC.RespondApproval, (_event, id: string, choice: "allow-once" | "always-allow" | "deny") => {
+  ipcMain.handle(IPC.RespondApproval, (_event, rawId: unknown, rawChoice: unknown) => {
+    const id = validateApprovalId(rawId);
+    const choice = validateApprovalChoice(rawChoice);
     approvals.respond(id, choice);
   });
 
@@ -210,8 +342,9 @@ async function boot(): Promise<void> {
 
   ipcMain.handle(IPC.GetRelays, () => storage.loadRelays() ?? DEFAULT_RELAYS);
 
-  ipcMain.handle(IPC.SetRelays, async (_event, urls: string[]) => {
-    const normalized = normalizeRelayUrls(urls);
+  ipcMain.handle(IPC.SetRelays, async (_event, rawUrls: unknown) => {
+    const urls = validateRelayUrlsInput(rawUrls);
+    const normalized = ensureNonEmptyRelays(normalizeRelayUrls(urls));
     storage.saveRelays(normalized);
     if (transport) {
       await transport.setRelays(normalized);
@@ -228,7 +361,7 @@ if (isElectronRuntime) {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("Failed to start signer:", message);
-      await dialog.showErrorBox(
+      dialog.showErrorBox(
         "Nostr Signer failed to start",
         `The app could not initialize.\n\n${message}`
       );
