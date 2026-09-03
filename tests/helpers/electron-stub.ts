@@ -6,3 +6,4 @@ export const safeStorage = {
   encryptString: (s: string) => Buffer.from(s),
   decryptString: (b: Uint8Array) => Buffer.from(b).toString()
 };
+export const dialog = { showErrorBox: async () => {} };

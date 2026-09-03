@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
@@ -222,8 +222,19 @@ async function boot(): Promise<void> {
 const isElectronRuntime = process.versions.electron !== undefined && app !== undefined;
 
 if (isElectronRuntime) {
-  app.whenReady().then(() => {
-    void boot();
+  app.whenReady().then(async () => {
+    try {
+      await boot();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Failed to start signer:", message);
+      await dialog.showErrorBox(
+        "Nostr Signer failed to start",
+        `The app could not initialize.\n\n${message}`
+      );
+      app.quit();
+      return;
+    }
     createWindow();
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -235,4 +246,9 @@ if (isElectronRuntime) {
   app.on("window-all-closed", () => {
     app.quit();
   });
+
+  app.on("before-quit", () => {
+    transport?.destroy();
+  });
 }
+
