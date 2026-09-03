@@ -1,1 +1,0 @@
-export const PRELOAD_PLACEHOLDER = "preload";
