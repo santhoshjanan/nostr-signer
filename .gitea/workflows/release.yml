@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  package:
+    # See the comment in ci.yml: match this label to your registered
+    # Windows Gitea Actions runner.
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build distributable
+        run: npm run dist
+
+      - name: Zip distributable
+        shell: pwsh
+        run: Compress-Archive -Path dist/win-unpacked/* -DestinationPath nostr-signer-${{ gitea.ref_name }}-win.zip
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nostr-signer-${{ gitea.ref_name }}-win
+          path: nostr-signer-${{ gitea.ref_name }}-win.zip
+          retention-days: 30
+
+      # Gitea has no native equivalent of softprops/action-gh-release; this
+      # third-party action talks to the Gitea API instead. Verify it (or swap
+      # in whatever release action your Gitea version/instance prefers)
+      # before relying on it -- the action ecosystem here is less
+      # standardized than GitHub's.
+      - name: Create Gitea release
+        uses: akkuman/gitea-release-action@v1
+        with:
+          files: nostr-signer-${{ gitea.ref_name }}-win.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
