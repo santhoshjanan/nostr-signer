@@ -1,8 +1,30 @@
 # Nostr Signer
 
-A personal NIP-46 remote signer ("bunker") for Windows, macOS, and Linux. Your nsec is encrypted at rest via Electron `safeStorage` (Windows DPAPI, macOS Keychain, or the Linux Secret Service/libsecret keyring) and only ever exists in the main process's memory. Web clients connect by pasting the `bunker://` URI shown in the app.
+[![CI](https://github.com/santhoshjanan/nostr-signer/actions/workflows/ci.yml/badge.svg)](https://github.com/santhoshjanan/nostr-signer/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/santhoshjanan/nostr-signer?label=release)](https://github.com/santhoshjanan/nostr-signer/releases/latest)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/santhoshjanan/nostr-signer/releases/latest)
 
-Linux needs a running Secret Service provider (GNOME Keyring, KWallet, etc.) for `safeStorage` to have anywhere to store the key — headless/no-keyring setups will fail to encrypt.
+Your own personal Nostr "bunker" — keep your nsec on your own machine, and let web clients sign in and post without ever seeing your private key.
+
+Nostr Signer is a friendly little desktop app that speaks [NIP-46](https://github.com/nostrasp/nips/blob/master/46.md) (remote signing). Generate or import a key once, keep the app running, and any NIP-46-capable web client can connect with a `bunker://` URI and ask you to approve each action — no copying your nsec into random websites ever again.
+
+Your key is encrypted at rest via Electron `safeStorage` (Windows DPAPI, macOS Keychain, or the Linux Secret Service/libsecret keyring) and only ever exists unencrypted in the app's own memory while it's running.
+
+> **Linux users:** you'll need a running Secret Service provider (GNOME Keyring, KWallet, etc.) — `safeStorage` needs somewhere to keep the encryption key. Headless/no-keyring setups won't be able to encrypt.
+
+## Download
+
+Grab the latest build for your OS from the **[Releases page](https://github.com/santhoshjanan/nostr-signer/releases/latest)** — no build tools required:
+
+| Platform | What to grab |
+| --- | --- |
+| 🪟 Windows | `nostr-signer-vX.Y.Z-win.zip` — unzip, then run `Nostr Signer.exe` |
+| 🍎 macOS | `nostr-signer-vX.Y.Z-mac.zip` — unzip, then open `Nostr Signer.app` |
+| 🐧 Linux | `nostr-signer-vX.Y.Z-linux.zip` — unzip, then run `nostr-signer` |
+
+These are unpacked app folders, not installers — just extract the zip and run the executable inside. Releases are versioned with [semver](https://semver.org/), so `vX.Y.Z` tells you exactly what changed (see each release's notes for details).
+
+Prefer to build it yourself instead? Keep reading.
 
 ## Develop
 
