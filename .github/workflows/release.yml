@@ -33,7 +33,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -42,11 +42,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
-        run: npm test
-
       - name: Build distributable
         run: npm run dist
+
+      - name: Test
+        run: npm test
 
       - name: Zip distributable (Windows)
         if: runner.os == 'Windows'
