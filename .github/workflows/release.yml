@@ -19,7 +19,6 @@ jobs:
             dist_dir: dist/win-unpacked
             asset_name: nostr-signer-${{ github.ref_name }}-win.zip
           - os: macos-latest
-            dist_dir: dist/mac
             asset_name: nostr-signer-${{ github.ref_name }}-mac.zip
           - os: ubuntu-latest
             dist_dir: dist/linux-unpacked
@@ -53,9 +52,22 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path "${{ matrix.dist_dir }}/*" -DestinationPath "${{ matrix.asset_name }}"
 
-      - name: Zip distributable (macOS/Linux)
-        if: runner.os != 'Windows'
+      - name: Zip distributable (Linux)
+        if: runner.os == 'Linux'
         run: (cd "${{ matrix.dist_dir }}" && zip -r -y "../../${{ matrix.asset_name }}" .)
+
+      - name: Zip distributable (macOS)
+        if: runner.os == 'macOS'
+        # electron-builder names the dir-target output folder after the
+        # build arch (mac / mac-arm64 / mac-universal), which varies with
+        # the runner's host arch, so resolve it instead of hardcoding it.
+        run: |
+          mac_dir=$(find dist -maxdepth 1 -type d -name 'mac*' | head -n 1)
+          if [ -z "$mac_dir" ]; then
+            echo "No dist/mac* directory found" >&2
+            exit 1
+          fi
+          (cd "$mac_dir" && zip -r -y "../../${{ matrix.asset_name }}" .)
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
