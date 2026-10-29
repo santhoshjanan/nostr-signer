@@ -6,9 +6,9 @@ import { join } from "node:path";
 const startMock = vi.fn();
 
 vi.mock("../src/main/bunker.js", () => ({
-  BunkerCore: vi.fn().mockImplementation(() => ({
-    start: startMock
-  }))
+  BunkerCore: vi.fn().mockImplementation(function () {
+    return { start: startMock };
+  })
 }));
 
 const { startBunker } = await import("../src/main/index.js");
